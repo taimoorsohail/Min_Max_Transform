@@ -107,10 +107,10 @@ da_A_sum = xr.DataArray(data = A_sum, dims = ["Basin", "Time","Depth"],
 
 ## Create xarray DataSet that will hold all these DataArrays
 ds_BSP = xr.Dataset()
-ds_BSP['Partitions_hist'] = da_partitions
-ds_BSP['T_mean_hist'] = da_T_mean
-ds_BSP['S_mean_hist'] = da_S_mean
-ds_BSP['V_sum_hist'] = da_V_sum
-ds_BSP['A_sum_hist'] = da_A_sum
+ds_BSP['Partitions'] = da_partitions
+ds_BSP['T_mean'] = da_T_mean
+ds_BSP['S_mean'] = da_S_mean
+ds_BSP['V_sum'] = da_V_sum
+ds_BSP['A_sum'] = da_A_sum
 
 ds_BSP.to_netcdf('/g/data/e14/txs156/Analysis/BSP_processed/BSP_EN4_TS_hist_area_%i_%i.nc' %(ti*window, (ti+1)*window-1))
