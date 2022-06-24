@@ -1,7 +1,7 @@
 import cvxpy as cp
 import numpy as np
 
-def optimise(tracers,volumes,cons_matrix,weights):
+def optimise(tracers,volumes,cons_matrix,trans,trans2,weights):
     '''
     Author: Taimoor Sohail (2022)
     This function takes matrices of tracers, volumes, weights, and constraints, 
@@ -14,6 +14,7 @@ def optimise(tracers,volumes,cons_matrix,weights):
     For just T and S, M = 2. Other tracers such as carbon may be added to this matrix.
     cons_matrix: A [N X N] matrix defining the connectivity from one 'N' watermass to any other 'N' watermass. 
     The elements in this matrix must be between 0 (no connection) and 1 (fully connected).
+    trans: Set of constraints on inter-basin transport (e.g., we can fix ITF transport to be 15 Sv).
     weights: An [M x N] matrix defining any tracer-specific weights to scale the transports by watermass, 
     for instance, outcrop surface area, or a T/S scaling factor. 
     Note - The optimiser uses the MOSEK solver, and advanced optimisation software that requires a (free) license. You MUST install MOSEK to use the function. 
@@ -29,7 +30,10 @@ def optimise(tracers,volumes,cons_matrix,weights):
     N = volumes.shape[-1]
     M = tracers.shape[1]
 
-    nofaces = np.nansum(cons_matrix)
+    nofaces = np.count_nonzero(cons_matrix)
+    trans_full = np.zeros(int(nofaces))
+    trans2_full = np.zeros(int(nofaces))
+
     C1_connec=np.zeros((N,int(nofaces)))
     C2_connec=np.zeros((N,int(nofaces)))
     # Also make T and S matrix with the T(k,i) the temp of the ith early WM
@@ -37,13 +41,14 @@ def optimise(tracers,volumes,cons_matrix,weights):
     Smatrix=np.zeros((N,int(nofaces)))
     if M>2:
         trac_matrix = np.zeros((M-2,N,int(nofaces)))
-
     ix=0
     for i in (range(N)):
         for j in range(N):
             if cons_matrix[i,j]>0:
                 C1_connec[i,ix] = cons_matrix[i,j] # vertex ix connects from WM i
                 C2_connec[j,ix] = cons_matrix[i,j] # vertex ix connects to WM j
+                trans_full[ix] = trans[i,j]
+                trans2_full[ix] = trans2[i,j]
                 Tmatrix[j,ix] = tracers[0,1,i] #vertex ix brings temp of WM i to WM j
                 Smatrix[j,ix] = tracers[0,0,i] #vertex ix brings temp of WM i to WM j
                 if M>2:
@@ -70,7 +75,7 @@ def optimise(tracers,volumes,cons_matrix,weights):
 
     cost = cp.sum_squares(A@x-b)
 
-    constraints = [C@x==d, x>=0]
+    constraints = [C@x==d, x>=0, cp.sum(x*trans_full.flatten())==-0.473364]#, cp.sum(x*trans2_full.flatten())==2.682396]
     prob = cp.Problem(cp.Minimize(cost), constraints)
 
     # The optimal objective value is returned by prob.solve()`.
@@ -141,4 +146,4 @@ def optimise(tracers,volumes,cons_matrix,weights):
         Mix_matrix = np.vstack((dSmix, dTmix))
         Adj_matrix = np.vstack((S_Av_adj, T_Av_adj))
 
-    return {'g_ij':G, 'Mixing': Mix_matrix, 'Adjustment': Adj_matrix , 'C':C, 'A':A, 'b':b, 'd':d}
+    return {'g_ij':G, 'Mixing': Mix_matrix, 'Adjustment': Adj_matrix}
