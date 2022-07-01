@@ -1,7 +1,7 @@
 import cvxpy as cp
 import numpy as np
 
-def optimise(tracers,volumes,cons_matrix,trans,trans2,weights):
+def optimise(tracers, volumes, cons_matrix, trans, weights):#Asection, threshold, 
     '''
     Author: Taimoor Sohail (2022)
     This function takes matrices of tracers, volumes, weights, and constraints, 
@@ -32,7 +32,7 @@ def optimise(tracers,volumes,cons_matrix,trans,trans2,weights):
 
     nofaces = np.count_nonzero(cons_matrix)
     trans_full = np.zeros(int(nofaces))
-    trans2_full = np.zeros(int(nofaces))
+    # Asection_full = np.zeros(int(nofaces))
 
     C1_connec=np.zeros((N,int(nofaces)))
     C2_connec=np.zeros((N,int(nofaces)))
@@ -48,7 +48,7 @@ def optimise(tracers,volumes,cons_matrix,trans,trans2,weights):
                 C1_connec[i,ix] = cons_matrix[i,j] # vertex ix connects from WM i
                 C2_connec[j,ix] = cons_matrix[i,j] # vertex ix connects to WM j
                 trans_full[ix] = trans[i,j]
-                trans2_full[ix] = trans2[i,j]
+                # Asection_full[ix] = Asection[i,j]
                 Tmatrix[j,ix] = tracers[0,1,i] #vertex ix brings temp of WM i to WM j
                 Smatrix[j,ix] = tracers[0,0,i] #vertex ix brings temp of WM i to WM j
                 if M>2:
@@ -75,7 +75,7 @@ def optimise(tracers,volumes,cons_matrix,trans,trans2,weights):
 
     cost = cp.sum_squares(A@x-b)
 
-    constraints = [C@x==d, x>=0, cp.sum(x*trans_full.flatten())==-0.473364]#, cp.sum(x*trans2_full.flatten())==2.682396]
+    constraints = [C@x==d, x>=0, cp.sum(x*trans_full.flatten())==-0.473364]#, x/Asection_full.flatten()<=threshold]
     prob = cp.Problem(cp.Minimize(cost), constraints)
 
     # The optimal objective value is returned by prob.solve()`.
