@@ -1,7 +1,7 @@
 import cvxpy as cp
 import numpy as np
 
-def optimise(**kwargs):#tracers, volumes, cons_matrix, trans, weights):#Asection, threshold, 
+def optimise(**kwargs):
     '''
     Author: Taimoor Sohail (2022)
     This function takes matrices of tracers, volumes, weights, and constraints, 
@@ -14,8 +14,8 @@ def optimise(**kwargs):#tracers, volumes, cons_matrix, trans, weights):#Asection
     For just T and S, M = 2. Other tracers such as carbon may be added to this matrix.
     cons_matrix: A [N X N] matrix defining the connectivity from one 'N' watermass to any other 'N' watermass. 
     The elements in this matrix must be between 0 (no connection) and 1 (fully connected).
-    trans: Set of constraints on inter-basin transport (e.g., we can fix ITF transport to be 15 Sv).
-    Asection: Matrix which defines the section areas across each basin mask. 
+    trans: Set of constraints on inter-basin transport (e.g., we can fix ITF transport to be 15 Sv). Threshold must be provided.
+    Asection: Matrix which defines the section areas across each basin mask. Threshold must be provided.
     weights: An [M x N] matrix defining any tracer-specific weights to scale the transports by watermass, 
     for instance, outcrop surface area, or a T/S scaling factor. 
     Note - The optimiser uses the MOSEK solver, and advanced optimisation software that requires a (free) license. You MUST install MOSEK to use the function. 
@@ -38,16 +38,17 @@ def optimise(**kwargs):#tracers, volumes, cons_matrix, trans, weights):#Asection
         if names[i] == 'cons_matrix':
             cons_matrix = np.array(list(kwargs.values())[i])
         if names[i] == 'trans':
-            trans = np.array(list(kwargs.values())[i])
+            trans_list = np.array(list(kwargs.values())[i])
+            trans = trans_list[0]
+            trans_val = trans_list[1]
             trans_exists = True
         if names[i] == 'weights':
             weights = np.array(list(kwargs.values())[i])
         if names[i] == 'Asection':
-            Asection = np.array(list(kwargs.values())[i])
+            Asection_list = np.array(list(kwargs.values())[i])
+            Asection = Asection_list[0]
+            threshold = Asection_list[1]
             A_exists = True
-        if names[i] == 'threshold':
-            threshold = np.array(list(kwargs.values())[i])
-
     ## Define matrices for the linear optimisation
 
     N = volumes.shape[-1]
@@ -102,9 +103,9 @@ def optimise(**kwargs):#tracers, volumes, cons_matrix, trans, weights):#Asection
 
     cost = cp.sum_squares(A@x-b)
     if trans_exists==True and A_exists==False:
-        constraints = [C@x==d, x>=0, cp.sum(x*trans_full.flatten())==-0.473364]
+        constraints = [C@x==d, x>=0, cp.sum(x*trans_full.flatten())==trans_val]
     if trans_exists==True and A_exists==True:
-        constraints = [C@x==d, x>=0, cp.sum(x*trans_full.flatten())==-0.473364, x/Asection_full.flatten()<=threshold]
+        constraints = [C@x==d, x>=0, cp.sum(x*trans_full.flatten())==trans_val, x/Asection_full.flatten()<=threshold]
     if trans_exists==False and A_exists==True:
         constraints = [C@x==d, x>=0, x/Asection_full.flatten()<=threshold]
     if trans_exists==False and A_exists==False:
