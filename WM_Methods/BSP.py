@@ -102,7 +102,7 @@ def calc(x, y, z, depth: int, axis: int = 0, **kwargs):
     v1 = z[idx].cumsum()
     
     idx_l = idx[v1<vtot_half]
-    idx_r = idx[v1>vtot_half]
+    idx_r = idx[v1>=vtot_half]
     
     # Recurse into the branches
     left = calc(x[idx_l], y[idx_l], z[idx_l], depth-1, (axis+1)%2, sum = sum_vals[:,idx_l], mean = mean_vals[:,idx_l], weight = w[idx_l])  

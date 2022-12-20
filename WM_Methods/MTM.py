@@ -18,6 +18,7 @@ def optimise(**kwargs):
     Asection: Matrix which defines the section areas across each basin mask. Threshold must be provided.
     weights: An [M x N] matrix defining any tracer-specific weights to scale the transports by watermass, 
     for instance, outcrop surface area, or a T/S scaling factor. 
+    hard_area: A Way to deal with zero surface outcrop water masses that isn't factored into the weights above - we add a hard constraint that T_1,j*V_1,j = sum(g_ij*T_0i)
     Note - The optimiser uses the MOSEK solver, and advanced optimisation software that requires a (free) license. You MUST install MOSEK to use the function. 
     Outputs:
 
@@ -29,6 +30,7 @@ def optimise(**kwargs):
     ## Break down kwarg inputs
     A_exists = False
     trans_exists = False
+    hard_A_cons = False
     names = list(kwargs.keys())
     for i in range(np.array(names).size):
         if names[i] == 'volumes':
@@ -49,6 +51,10 @@ def optimise(**kwargs):
             Asection = Asection_list[0]
             threshold = Asection_list[1]
             A_exists = True
+        if names[i] == 'hard_area':
+            area_hard = np.array(list(kwargs.values())[i])
+            hard_A_cons = True
+
     ## Define matrices for the linear optimisation
 
     N = volumes.shape[-1]
@@ -84,6 +90,9 @@ def optimise(**kwargs):
                 ix=ix+1
 
     C = np.concatenate((C1_connec,C2_connec),axis=0)
+
+    d = np.concatenate((volumes[0,:],volumes[1,:]),axis=0)
+
     A_T = np.zeros_like(Tmatrix)
     A_S = np.zeros_like(Tmatrix)
     for i in range(int(nofaces)):
@@ -91,10 +100,23 @@ def optimise(**kwargs):
         A_S[:,i] = Smatrix[:,i]*weights[0,:]
 
     A = np.concatenate((A_T,A_S),axis=0)
+    
     b = np.concatenate((volumes[1,:]*tracers[1,1,:]*weights[1,:],\
                     volumes[1,:]*tracers[1,0,:]*weights[0,:]), axis=0)
     b[np.isnan(b)]=0
-    d = np.concatenate((volumes[0,:],volumes[1,:]),axis=0)
+
+    if hard_A_cons:
+        A_T2 = np.zeros_like(Tmatrix)
+        A_S2 = np.zeros_like(Tmatrix)
+        for i in range(int(nofaces)):
+            A_T2[:,i] = Tmatrix[:,i]*area_hard[1,:]
+            A_S2[:,i] = Smatrix[:,i]*area_hard[0,:]
+        
+        A2 = np.concatenate((A_T2,A_S2),axis=0)
+
+        b2 = np.concatenate((volumes[1,:]*tracers[1,1,:]*area_hard[1,:],\
+                volumes[1,:]*tracers[1,0,:]*area_hard[0,:]), axis=0)
+        b2[np.isnan(b)]=0
 
     ## Invoke solver to calculate transports
     u = A.shape[1]
@@ -102,15 +124,15 @@ def optimise(**kwargs):
     x = cp.Variable(u)
 
     cost = cp.sum_squares(A@x-b)
-    if trans_exists==True and A_exists==False:
-        constraints = [C@x==d, x>=0, cp.sum(x*trans_full.flatten())==trans_val]
-    if trans_exists==True and A_exists==True:
-        constraints = [C@x==d, x>=0, cp.sum(x*trans_full.flatten())==trans_val, x/Asection_full.flatten()<=threshold]
-    if trans_exists==False and A_exists==True:
-        constraints = [C@x==d, x>=0, x/Asection_full.flatten()<=threshold]
-    if trans_exists==False and A_exists==False:
-        constraints = [C@x==d, x>=0]
 
+    constraints = [C@x==d, x>=0]
+
+    if trans_exists==True:
+        constraints.append(cp.sum(x*trans_full.flatten())==trans_val)
+    if A_exists==True:
+        constraints.append(x/Asection_full.flatten()<=threshold)
+    if hard_A_cons==True:
+        constraints.append(A2@x==b2)
     prob = cp.Problem(cp.Minimize(cost), constraints)
 
     # The optimal objective value is returned by prob.solve()`.
