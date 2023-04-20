@@ -203,4 +203,125 @@ def optimise(**kwargs):
         Mix_matrix = np.vstack((dSmix, dTmix))
         Adj_matrix = np.vstack((S_Av_adj, T_Av_adj))
 
-    return {'g_ij':G, 'Mixing': Mix_matrix, 'Adjustment': Adj_matrix}
+    return {'g_ij':G, 'G':g_ij, 'Mixing': Mix_matrix, 'Adjustment': Adj_matrix}
+
+def optimise2(**kwargs):
+    '''
+    Author: Taimoor Sohail (2023)
+    This function takes matrices of tracers, volumes, weights, constraints, and optimal transports (g_ij) 
+    and produces an optimal surface flux adjustment (Q_adj) applied to ith water masses based on the g_ij provided.
+
+    Inputs:
+
+    volumes: A [2 x N] array of volumes/masses corresponding to the early and late watermasses
+    tracers: A [2 x M x N]  array of tracers, where N is the number of watermasses, M is the number of distinct tracers, and 2 corresponds to the early and late watermasses
+    For just T and S, M = 2. Other tracers such as carbon may be added to this matrix.
+    cons_matrix: A [N X N] matrix defining the connectivity from one 'N' watermass to any other 'N' watermass. 
+    The elements in this matrix must be between 0 (no connection) and 1 (fully connected).
+    weights: An [M x N] matrix defining any tracer-specific weights to scale the transports by watermass, 
+    for instance, outcrop surface area, or a T/S scaling factor. 
+    g_ij: The 1D transports from ith water masses to jth water masses, of maximal size 1xN^2 (if cons_matrix ==1 everywhere) 
+    Note - The optimiser uses the MOSEK solver, and advanced optimisation software that requires a (free academic) license. You MUST install MOSEK to use the function. 
+    
+    Outputs:
+
+    Temp. and Salinity adjustment: A matrix of size [1 x N] which represents the adjustment in T and S into each ith watermass. 
+    '''
+
+    names = list(kwargs.keys())
+    for i in range(np.array(names).size):
+        if names[i] == 'volumes':
+            volumes = np.array(list(kwargs.values())[i])
+        if names[i] == 'tracers':
+            tracers = np.array(list(kwargs.values())[i])
+        if names[i] == 'cons_matrix':
+            cons_matrix = np.array(list(kwargs.values())[i])
+        if names[i] == 'weights':
+            weights = np.array(list(kwargs.values())[i])
+        if names[i] == 'g_ij':
+            G = np.array(list(kwargs.values())[i])
+
+    N = volumes.shape[-1]
+
+    nofaces = np.count_nonzero(cons_matrix)
+
+    Tmatrix1=np.zeros((N,int(nofaces)))
+    Smatrix1=np.zeros((N,int(nofaces)))
+    Tmatrix2=np.zeros((N,int(nofaces)))
+    Smatrix2=np.zeros((N,int(nofaces)))
+    Vmatrix2=np.zeros((N,int(nofaces)))
+
+    ix=0
+    for i in (range(N)):
+        for j in range(N):
+            if cons_matrix[i,j]>0:
+                Tmatrix1[j,ix] = tracers[0,1,i] #vertex ix brings temp of WM i to WM j
+                Smatrix1[j,ix] = tracers[0,0,i] #vertex ix brings temp of WM i to WM j
+                # Tmatrix2[j,ix] = tracers[1,1,i] #vertex ix brings temp of WM i to WM j
+                # Smatrix2[j,ix] = tracers[1,0,i] #vertex ix brings temp of WM i to WM j
+                Vmatrix2[j,ix] = volumes[1,i]
+                ix=ix+1
+
+    volumes_2 = np.concatenate((volumes[1,:], volumes[1,:])) # Shape: [2 x N]
+    tracers_2 = np.concatenate((tracers[1,1,:],tracers[1,0,:]))
+
+    A_T1 = np.zeros_like(Tmatrix1)
+    A_S1 = np.zeros_like(Tmatrix1)
+    for i in range(int(nofaces)):
+        A_T1[:,i] = Tmatrix1[:,i]*weights[1,:]
+        A_S1[:,i] = Smatrix1[:,i]*weights[0,:]
+
+    A1 = np.concatenate((A_T1,A_S1),axis=0)
+
+    # A_T2 = np.zeros_like(Tmatrix2)
+    # A_S2 = np.zeros_like(Tmatrix2)
+    # for i in range(int(nofaces)):
+    #     A_T2[:,i] = Tmatrix2[:,i]*weights[1,:]
+    #     A_S2[:,i] = Smatrix2[:,i]*weights[0,:]
+
+    # A2 = np.concatenate((A_T2,A_S2),axis=0)
+
+    Vmat2_T = np.zeros_like(Vmatrix2)
+    Vmat2_S = np.zeros_like(Vmatrix2)
+
+    for i in range(int(nofaces)):
+        Vmat2_T[:,i] = Vmatrix2[:,i]*weights[1,:]
+        Vmat2_S[:,i] = Vmatrix2[:,i]*weights[0,:]
+
+    Vmatrix2 = np.concatenate((Vmat2_T,Vmat2_S),axis=0)
+
+    ## Invoke solver to calculate transports
+    u = A1.shape
+
+    x = cp.Variable(u)
+
+    cost = cp.sum_squares(x.flatten() * Vmatrix2.flatten())
+
+    constraints = [x@G == volumes_2*tracers_2 - A1@G]
+    prob = cp.Problem(cp.Minimize(cost), constraints)
+
+
+    # The optimal objective value is returned by prob.solve()`.
+    # OSQP, ECOS, ECOS_BB, MOSEK, CBC, CVXOPT, NAG, GUROBI, and SCS
+    result = prob.solve(verbose=True, solver=cp.MOSEK)
+
+    if prob.status not in ["infeasible", "unbounded"]:
+        # Otherwise, problem.value is inf or -inf, respectively.
+        print("Optimal value: %s" % prob.value)
+    for variable in prob.variables():
+        print("Variable %s: value %s" % (variable.name(), variable.value))
+
+    # The optimal value for x is stored in `x.value`.
+    tracer_adj = x.value
+
+    T_adj = np.zeros(N)
+    S_adj = np.zeros(N)
+    ix=0
+    for i in (range(N)):
+        for j in range(N):
+            if cons_matrix[i,j]>0:
+                T_adj[i] = tracer_adj[j,ix] #vertex ix brings temp of WM i to WM j
+                S_adj[i] = tracer_adj[j+N,ix] #vertex ix brings temp of WM i to WM j
+                ix=ix+1
+
+    return {'Q_full':tracer_adj, 'Q_T':T_adj, 'Q_S':S_adj}
