@@ -259,7 +259,7 @@ def optimise2(**kwargs):
                 Smatrix1[j,ix] = tracers[0,0,i] #vertex ix brings temp of WM i to WM j
                 # Tmatrix2[j,ix] = tracers[1,1,i] #vertex ix brings temp of WM i to WM j
                 # Smatrix2[j,ix] = tracers[1,0,i] #vertex ix brings temp of WM i to WM j
-                Vmatrix2[j,ix] = volumes[1,i]
+                Vmatrix2[j,ix] = volumes[0,i]
                 ix=ix+1
 
     volumes_2 = np.concatenate((volumes[1,:], volumes[1,:])) # Shape: [2 x N]
@@ -268,8 +268,8 @@ def optimise2(**kwargs):
     A_T1 = np.zeros_like(Tmatrix1)
     A_S1 = np.zeros_like(Tmatrix1)
     for i in range(int(nofaces)):
-        A_T1[:,i] = Tmatrix1[:,i]*weights[1,:]
-        A_S1[:,i] = Smatrix1[:,i]*weights[0,:]
+        A_T1[:,i] = Tmatrix1[:,i]
+        A_S1[:,i] = Smatrix1[:,i]
 
     A1 = np.concatenate((A_T1,A_S1),axis=0)
 
@@ -312,7 +312,7 @@ def optimise2(**kwargs):
         print("Variable %s: value %s" % (variable.name(), variable.value))
 
     # The optimal value for x is stored in `x.value`.
-    tracer_adj = x.value
+    tracer_adj = variable.value
 
     T_adj = np.zeros(N)
     S_adj = np.zeros(N)
@@ -324,4 +324,5 @@ def optimise2(**kwargs):
                 S_adj[i] = tracer_adj[j+N,ix] #vertex ix brings temp of WM i to WM j
                 ix=ix+1
 
-    return {'Q_full':tracer_adj, 'Q_T':T_adj, 'Q_S':S_adj}
+    return {'Q_full': tracer_adj, 'Q_T': T_adj, 'Q_S': S_adj}
+# , 'Q_area_flux': tracer_adj/weights_combi,
