@@ -1,4 +1,7 @@
 Masks_processed/*.nc
 Basin_mask/*.nc
 TS_Sfunction/*.nc
+*.png
+ECCO_NM/*
+Figures/*
 
