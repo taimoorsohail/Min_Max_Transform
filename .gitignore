@@ -3,5 +3,5 @@ Basin_mask/*.nc
 TS_Sfunction/*.nc
 *.png
 ECCO_NM/*
-Figures/*
+Figures/*.png
 
