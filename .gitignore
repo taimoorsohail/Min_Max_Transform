@@ -1,7 +1,8 @@
 Masks_processed/*.nc
 Basin_mask/*.nc
 TS_Sfunction/*.nc
-
+.DS_Store
+ACCESS_CM2/.DS_Store
 ECCO_NM/*
-Figures/*.png
+Figures/*
 Optimisation_results/*.nc
