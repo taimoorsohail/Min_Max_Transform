@@ -203,7 +203,7 @@ def optimise(**kwargs):
         Mix_matrix = np.vstack((dSmix, dTmix))
         Adj_matrix = np.vstack((S_Av_adj, T_Av_adj))
 
-    return {'g_ij':G, 'G':g_ij, 'Mixing': Mix_matrix, 'Adjustment': Adj_matrix}
+    return {'g_ij':G, 'G':g_ij, 'Mixing': Mix_matrix, 'Adjustment': Adj_matrix, 'optimal_val':prob.value}
 
 def optimise2(**kwargs):
     '''
